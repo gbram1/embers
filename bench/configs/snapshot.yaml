@@ -1,0 +1,11 @@
+# Full fast path: restore post-init GPU state from a snapshot, gated on a
+# matching fingerprint. The differentiating row. eng doc §5, §7.7.
+name: snapshot
+model: meta-llama/Llama-3.1-8B
+source: s3
+engine: vllm
+optimizations:
+  - safetensors_mmap
+  - pinned_overlapped
+  - nvme_cache
+  - snapshot_restore

@@ -1,0 +1,18 @@
+# embers platform config. Run:  embers up --config platform.yaml
+host: 0.0.0.0
+port: 8080
+api_keys: []            # bearer tokens; empty = open (dev only)
+tick_interval: 15       # control-loop period (seconds)
+
+gpus: auto              # or a list: [{id: gpu0, vram_mb: 24000}]
+
+models:
+  - name: Qwen/Qwen2.5-3B
+    vram_mb: 6000        # per-GPU footprint (one tensor-parallel shard)
+    min_replicas: 0      # 0 = scale fully to zero when idle
+    max_replicas: 3
+    idle_ttl: 300        # seconds idle before scaling to zero
+    tensor_parallel_size: 1   # >1 = shard ONE model across N GPUs (big models)
+    # adapters:               # optional LoRA adapters served off this base model,
+    #   sql: /adapters/sql    # selectable per-request via the `model` field —
+    #   support: /adapters/support   # many adapters share the base's GPU

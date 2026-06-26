@@ -1,0 +1,63 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "embers"
+dynamic = ["version"]
+description = "Fast model cold-start + scale-to-zero serving for vLLM — restore a model in seconds instead of cold-loading in minutes."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Gabriel Bram" }]
+keywords = [
+    "vllm", "llm", "inference", "serving", "gpu", "serverless",
+    "cold-start", "scale-to-zero", "snapshot", "cuda-checkpoint", "lora",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
+]
+dependencies = [
+    "pyyaml",          # config loading (the only hard dependency)
+]
+
+[project.optional-dependencies]
+# The OpenAI-compatible serving platform: gateway, autoscaler, control plane.
+# This is what you install to run `embers up` / `embers node`.
+serve = ["fastapi", "uvicorn", "pydantic", "httpx"]
+# Real GPU serving: the vLLM engine embers integrates (Linux + CUDA only).
+# Pinned to the integration-tested stack; loosen if you know your stack works.
+gpu = ["vllm==0.8.5", "transformers==4.51.3"]
+# The true-cold-start benchmark harness.
+bench = ["vllm"]
+dev = ["ruff", "pytest", "pytest-cov", "httpx", "build"]
+
+[project.scripts]
+embers = "embers.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/your-org/embers"
+Repository = "https://github.com/your-org/embers"
+Documentation = "https://github.com/your-org/embers/tree/main/docs"
+
+[tool.hatch.version]
+path = "embers/__init__.py"          # single source of truth: __version__
+
+[tool.hatch.build.targets.wheel]
+packages = ["embers"]
+
+[tool.hatch.build.targets.sdist]
+include = ["embers", "README.md", "LICENSE", "DEPLOY.md", "examples", "deploy"]
+
+[tool.ruff]
+line-length = 100

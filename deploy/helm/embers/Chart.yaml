@@ -1,0 +1,6 @@
+apiVersion: v2
+name: embers
+description: Serverless-GPU LLM serving with fast cold-start (scale-to-zero + cuda-checkpoint restore)
+type: application
+version: 0.1.0
+appVersion: "0.0.0"

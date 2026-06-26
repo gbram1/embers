@@ -1,0 +1,11 @@
+.venv/
+target/
+.git/
+bench/results/
+docs/
+crates/
+*.safetensors
+*.bin
+__pycache__/
+.pytest_cache/
+.ruff_cache/

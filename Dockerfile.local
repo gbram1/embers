@@ -1,0 +1,17 @@
+# Local / CI image — runs the FULL embers platform in MOCK mode (no GPU, no
+# vLLM). For trying the API, control loop, and scale-to-zero logic on any
+# machine. The real GPU image is ./Dockerfile.
+FROM python:3.12-slim
+
+WORKDIR /app
+RUN pip install --no-cache-dir fastapi uvicorn pyyaml httpx
+
+COPY embers /app/embers
+COPY deploy/platform.local.yaml /etc/embers/platform.yaml
+ENV PYTHONPATH=/app
+
+EXPOSE 8080
+# ENTRYPOINT is the base command; CMD is the default args (k8s `args:` overrides
+# CMD cleanly — don't bake args into ENTRYPOINT or they duplicate).
+ENTRYPOINT ["python", "-m", "embers.cli"]
+CMD ["up", "--config", "/etc/embers/platform.yaml", "--mock"]

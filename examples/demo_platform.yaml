@@ -1,0 +1,21 @@
+# embers demo config — tuned to SHOW the cold→serve→zero→restore story quickly.
+# Run on a single CUDA GPU (driver >=550 for snapshot/restore):
+#   embers up --config examples/demo_platform.yaml
+# then in another terminal:
+#   python examples/demo.py
+host: 0.0.0.0
+port: 8080
+tick_interval: 5            # check often so scale-to-zero happens promptly in the demo
+serve_port_base: 19000     # RunPod proxies low localhost ports — keep this high
+
+gpus: auto                 # detect the box's GPU(s) via nvidia-smi
+
+models:
+  # Qwen2.5-3B: its cold load is ~100s, so the ~10s fast-restore is a dramatic
+  # contrast — the headline of the demo. For a snappier (less dramatic) run, swap
+  # to Qwen/Qwen2.5-0.5B with vram_mb: 2000.
+  - name: Qwen/Qwen2.5-3B
+    vram_mb: 8000
+    min_replicas: 0        # 0 = scale fully to zero when idle (free the GPU)
+    max_replicas: 1
+    idle_ttl: 20           # idle 20s → scale to zero (short, so the demo moves)

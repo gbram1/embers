@@ -1,0 +1,12 @@
+# Control row: vanilla vLLM loading an 8B from local disk. The honest baseline
+# every optimization delta is measured against (expect ~30-60s). eng doc §7.4.
+name: naive_local
+model: Qwen/Qwen2.5-3B           # ~6GB fp16 — fits the 16GB RTX A4000 with room
+                                 # for KV cache. Scale to Qwen2.5-7B on a 24GB+
+                                 # card (A5000/A40) later; same harness, one line.
+source: local_disk               # local | s3
+engine: vllm
+dtype: auto                      # passed to vLLM
+max_model_len: 4096
+enforce_eager: false             # false = include CUDA-graph capture in init
+optimizations: []                # none — this is the control

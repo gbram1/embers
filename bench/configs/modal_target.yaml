@@ -1,0 +1,8 @@
+# The measured target row — NOT a blog "10x" claim. Deploy the SAME 8B on Modal
+# (replicate their snapshot example) and time it with this identical harness and
+# the true-cold protocol. That measured number is the bar. eng doc §7.5.
+name: modal_target
+model: meta-llama/Llama-3.1-8B
+source: modal            # external — driven via Modal's deployment, same harness
+engine: vllm
+optimizations: [modal_snapshot]

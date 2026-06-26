@@ -1,0 +1,29 @@
+# Docs + project instructions — kept local, NEVER tracked
+docs/
+CLAUDE.md
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.coverage
+
+# Benchmark output (recorded distributions are regenerated)
+bench/results/*.json
+
+# Models / weights — never commit
+*.safetensors
+*.bin
+*.pt
+models/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/

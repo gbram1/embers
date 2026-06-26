@@ -1,0 +1,33 @@
+# mock: true  → no GPU, in-process fake models (local k8s / kind / Docker Desktop)
+# mock: false → real GPU image; requests nvidia.com/gpu and needs the
+#               park/unpark privileges (see README) for scale-to-zero.
+mock: true
+
+image:
+  repository: embers
+  tag: local            # `local` = the mock image; use the GPU tag for real
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+service:
+  type: ClusterIP
+  port: 8080
+
+gpu:
+  count: 1              # nvidia.com/gpu requested per pod when mock=false
+
+resources: {}
+
+# The literal embers platform config — mounted at /etc/embers/platform.yaml.
+# For a real GPU deploy, set `mock: false` and use `gpus: auto` + real models.
+platform:
+  host: 0.0.0.0
+  port: 8080
+  tick_interval: 10
+  gpus:
+    - {id: g0, vram_mb: 24000}
+    - {id: g1, vram_mb: 24000}
+  models:
+    - {name: demo-3b, vram_mb: 6000, min_replicas: 0, idle_ttl: 300}
+    - {name: demo-7b, vram_mb: 16000, min_replicas: 0, idle_ttl: 300}

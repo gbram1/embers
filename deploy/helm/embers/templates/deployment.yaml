@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "embers.fullname" . }}
+  labels:
+    {{- include "embers.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "embers.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        # roll the pod when the config changes
+        checksum/config: {{ .Values.platform | toYaml | sha256sum }}
+      labels:
+        {{- include "embers.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: embers
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - up
+            - --config
+            - /etc/embers/platform.yaml
+            {{- if .Values.mock }}
+            - --mock
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+          readinessProbe:
+            httpGet: { path: /v1/models, port: http }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /v1/models, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          volumeMounts:
+            - name: config
+              mountPath: /etc/embers
+          resources:
+            {{- if not .Values.mock }}
+            limits:
+              nvidia.com/gpu: {{ .Values.gpu.count }}
+            {{- end }}
+            {{- with .Values.resources }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- if not .Values.mock }}
+          # cuda-checkpoint park/unpark needs these; only granted off-mock.
+          securityContext:
+            capabilities:
+              add: ["SYS_ADMIN", "CHECKPOINT_RESTORE"]
+          {{- end }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "embers.fullname" . }}-config

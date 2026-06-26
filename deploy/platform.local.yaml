@@ -1,0 +1,10 @@
+# Mock platform config for local/CI (no nvidia-smi, so GPUs are listed explicitly).
+host: 0.0.0.0
+port: 8080
+tick_interval: 10
+gpus:
+  - {id: g0, vram_mb: 24000}
+  - {id: g1, vram_mb: 24000}
+models:
+  - {name: demo-3b, vram_mb: 6000, min_replicas: 0, idle_ttl: 60}
+  - {name: demo-7b, vram_mb: 16000, min_replicas: 0, idle_ttl: 60}

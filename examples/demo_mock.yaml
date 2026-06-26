@@ -1,0 +1,15 @@
+# Laptop demo config (mock, no GPU). Short idle_ttl so the scale-to-zero phase
+# happens in seconds — so `examples/demo.py` completes the whole flow locally.
+#   embers up --config examples/demo_mock.yaml --mock     # terminal 1
+#   python examples/demo.py --url http://localhost:8080 --model demo   # terminal 2
+host: 0.0.0.0
+port: 8080
+tick_interval: 3           # check often so scale-to-zero is quick
+gpus:                      # mock can't probe nvidia-smi → list GPUs explicitly
+  - {id: g0, vram_mb: 24000}
+models:
+  - name: demo
+    vram_mb: 2000
+    min_replicas: 0
+    max_replicas: 1
+    idle_ttl: 12           # idle 12s → scale to zero (so the demo moves)

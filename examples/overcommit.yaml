@@ -1,0 +1,19 @@
+# Over-commit / demand eviction — pack MORE tenant models than fit on one GPU.
+# Each model takes ~the whole GPU (default util), so only ONE is resident at a
+# time; requesting another evicts the least-recently-used idle one (parks it,
+# frees the GPU), then serves. Re-requesting an evicted model fast-restores it.
+#   embers up --config examples/overcommit.yaml
+host: 0.0.0.0
+port: 8080
+tick_interval: 5
+serve_port_base: 19000
+gpus: auto
+overcommit: true            # assign more than fits; evict idle on demand
+eviction_policy: cost_aware # which idle model to evict: lru | cost_aware.
+                            # cost_aware keeps frequently-hit, expensive-to-reload,
+                            # small models resident; evicts rare/cheap/big ones.
+# vram_mb high so the scheduler sees only ONE fits → forces demand eviction.
+models:
+  - {name: Qwen/Qwen2.5-0.5B, vram_mb: 44000, max_model_len: 4096, min_replicas: 0, max_replicas: 1, idle_ttl: 60}
+  - {name: Qwen/Qwen2.5-1.5B, vram_mb: 44000, max_model_len: 4096, min_replicas: 0, max_replicas: 1, idle_ttl: 60}
+  - {name: Qwen/Qwen2.5-3B,   vram_mb: 44000, max_model_len: 4096, min_replicas: 0, max_replicas: 1, idle_ttl: 60}

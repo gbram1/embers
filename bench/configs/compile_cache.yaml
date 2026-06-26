@@ -1,0 +1,20 @@
+# Rung 1: persist vLLM's torch.compile cache across cold starts.
+#
+# A naive scale-to-zero deployment discards ~/.cache/vllm on every fresh
+# container, so it recompiles (~39s) every cold start. If that cache lives on a
+# surviving tier (NVMe / network volume), cold starts reuse the compiled graph
+# and compile drops to ~9s. This config measures that steady state: the cache is
+# wiped once, a warmup run repopulates it, then the measured runs all hit it warm.
+#
+# Same model/GPU as naive_local so the delta is attributable to the cache alone.
+name: compile_cache
+model: Qwen/Qwen2.5-3B
+source: local_disk
+engine: vllm
+dtype: auto
+max_model_len: 4096
+enforce_eager: false
+
+keep_compile_cache: true   # don't clear ~/.cache/vllm between runs
+warmup: 1                  # first run populates the cache; discarded from stats
+optimizations: [persist_compile_cache]

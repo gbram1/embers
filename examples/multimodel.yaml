@@ -1,0 +1,15 @@
+# Multi-tenant packing — 3 models CO-RESIDENT on one GPU, each taking a slice.
+# vLLM accounts for GPU memory cumulatively, so each model's gpu_memory_utilization
+# must cover all PRIOR models + its own (load order: 0.5B → 1.5B → 3B).
+# Footprints sum to ~28 GB of a 46 GB A40, so all three fit at once.
+#   embers up --config examples/multimodel.yaml
+#   python examples/pack_benchmark.py
+host: 0.0.0.0
+port: 8080
+tick_interval: 3
+serve_port_base: 19000
+gpus: auto
+models:
+  - {name: Qwen/Qwen2.5-0.5B, vram_mb: 7000,  gpu_memory_utilization: 0.15, max_model_len: 2048, min_replicas: 0, max_replicas: 1, idle_ttl: 240}
+  - {name: Qwen/Qwen2.5-1.5B, vram_mb: 9000,  gpu_memory_utilization: 0.35, max_model_len: 2048, min_replicas: 0, max_replicas: 1, idle_ttl: 240}
+  - {name: Qwen/Qwen2.5-3B,   vram_mb: 12000, gpu_memory_utilization: 0.62, max_model_len: 2048, min_replicas: 0, max_replicas: 1, idle_ttl: 240}
