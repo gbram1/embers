@@ -12,7 +12,7 @@ fast restore (from zero):   10.7s    ← restore the GPU snapshot   (~10× faste
 
 ### How it compares
 
-The snapshot mechanism — NVIDIA `cuda-checkpoint` (+ CRIU for full process-to-disk) — is the same one **NVIDIA Dynamo Snapshot** uses. The difference is *where it runs*: Dynamo Snapshot is Kubernetes-native, needs a privileged host (`CAP_SYS_ADMIN`), and is single-GPU in its current preview. embers runs **unprivileged on a bare rented pod, with no Kubernetes, and snapshots tensor-parallel (multi-GPU) models today** (validated on 2×A40). Rule of thumb: datacenter K8s cluster → Dynamo; a GPU you rented by the hour → embers.
+The snapshot mechanism — NVIDIA `cuda-checkpoint` (+ CRIU for full process-to-disk) — is the same one **NVIDIA Dynamo Snapshot** uses. The difference is *where it runs*: Dynamo Snapshot (as of its mid-2026 preview) is Kubernetes-native, needs a privileged host (`CAP_SYS_ADMIN`), and is single-GPU. embers runs **unprivileged on a bare rented pod, with no Kubernetes, and snapshots tensor-parallel (multi-GPU) models today** (validated on 2×A40). Rule of thumb: datacenter K8s cluster → Dynamo; a GPU you rented by the hour → embers.
 
 ## Features
 
@@ -131,6 +131,8 @@ Cold start is **engine init, not data movement** — weight load is ~2s; init is
 | + GPU checkpoint/restore | **8.9s** | 9.4s | 9.6s |
 
 Methodology: fresh process per run, OS page cache dropped between runs, ≥ 5–10 runs reported as a distribution (never a single number). The `bench/` harness enforces true-cold measurement.
+
+**Multi-GPU (the part Dynamo Snapshot's preview can't do yet):** one model tensor-parallel across **2× A40** — cold load **~103s → snapshot restore ~16s** (~6×), both GPUs freed on park and restored together. The recipe: lock all ranks → checkpoint all → restore all → unlock all (ranks share NCCL collectives, so quiesce everyone before checkpointing anyone).
 
 ## Deploying
 
