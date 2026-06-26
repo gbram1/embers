@@ -1,14 +1,18 @@
 # embers
 
-**Scale-to-zero LLM serving with fast GPU snapshot/restore.** Self-hosted, OpenAI-compatible, built on vLLM.
+**Scale-to-zero LLM serving that runs unprivileged on a single rented GPU — no Kubernetes, no privileged host.** Snapshot a serving-ready GPU and restore it in **~10 seconds**, so a model sits at **zero GPUs (and zero cost) while idle** and still answers the next request fast. OpenAI-compatible, built on vLLM.
 
-Serving an LLM forces a bad choice: keep GPUs running 24/7 (paying for idle time), or scale to zero and eat a ~100-second cold start on every wake. embers removes the tradeoff — it snapshots a serving-ready GPU and restores it in **~10 seconds**, so a model can sit at **zero GPUs while idle** and still answer the next request fast.
+Serving an LLM otherwise forces a bad choice: keep GPUs running 24/7 (paying for idle time), or scale to zero and eat a ~100-second cold start on every wake. embers removes the tradeoff.
 
 ```
 cold start (first ever):   104.0s    ← load weights + build the engine
 fast restore (from zero):   10.7s    ← restore the GPU snapshot   (~10× faster)
 ```
-*Measured on an A40 (Qwen2.5-3B): cold → serving → idle (GPU freed to 0 MB) → restore.*
+*Measured on a ~$0.40/hr rented A40 (Qwen2.5-3B): cold → serving → idle (GPU freed to 0 MB) → restore.*
+
+### How it compares
+
+The snapshot mechanism — NVIDIA `cuda-checkpoint` (+ CRIU for full process-to-disk) — is the same one **NVIDIA Dynamo Snapshot** uses. The difference is *where it runs*: Dynamo Snapshot is Kubernetes-native, needs a privileged host (`CAP_SYS_ADMIN`), and is single-GPU in its current preview. embers runs **unprivileged on a bare rented pod, with no Kubernetes, and snapshots tensor-parallel (multi-GPU) models today** (validated on 2×A40). Rule of thumb: datacenter K8s cluster → Dynamo; a GPU you rented by the hour → embers.
 
 ## Features
 
