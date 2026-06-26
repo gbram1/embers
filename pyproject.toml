@@ -3,7 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "embers"
+# PyPI distribution name (`embers` is taken). The import package stays `embers`
+# (`pip install embers-serve` → `import embers`), and the CLI stays `embers`.
+name = "embers-serve"
 dynamic = ["version"]
 description = "Fast model cold-start + scale-to-zero serving for vLLM — restore a model in seconds instead of cold-loading in minutes."
 readme = "README.md"

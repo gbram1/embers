@@ -26,18 +26,23 @@ The snapshot mechanism — NVIDIA `cuda-checkpoint` (+ CRIU for full process-to-
 
 ## Install
 
-Not on PyPI yet — install from source into a virtualenv:
-
 ```bash
-git clone https://github.com/gbram1/embers.git
-cd embers
-python3 -m venv .venv && source .venv/bin/activate
-pip install '.[serve]'               # control plane + OpenAI-compatible API
+pip install 'embers-serve[serve]'         # control plane + OpenAI-compatible API
 # on a Linux + CUDA box, add the vLLM engine (needs Python < 3.13):
-pip install '.[serve,gpu]'
+pip install 'embers-serve[serve,gpu]'
 ```
 
-Extras: `serve` (platform/API), `gpu` (real vLLM serving, Linux + CUDA), `bench` (cold-start harness), `dev` (tests). `[serve]` is pure-Python and installs anywhere, including macOS, so you can run the control plane in `--mock` mode without a GPU.
+The PyPI package is **`embers-serve`** (the name `embers` was taken); the **import and CLI are still `embers`** — `import embers`, `embers up`. Base `pip install embers-serve` is dependency-light (enough for `import embers` + `embers init`); serving needs `[serve]`, which is pure-Python and installs anywhere — including macOS — so you can run the control plane in `--mock` mode with no GPU.
+
+Or from source:
+
+```bash
+git clone https://github.com/gbram1/embers.git && cd embers
+python3 -m venv .venv && source .venv/bin/activate
+pip install '.[serve]'                     # add ,gpu on a Linux + CUDA box
+```
+
+Extras: `serve` (platform/API), `gpu` (real vLLM serving, Linux + CUDA), `bench` (cold-start harness), `dev` (tests).
 
 ## Quickstart
 
