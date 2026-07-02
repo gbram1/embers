@@ -22,7 +22,8 @@ def test_metrics_endpoint_counts_requests():
     for _ in range(3):
         c.post("/v1/completions", json={"model": "m", "prompt": "x"})
     text = c.get("/metrics").text
-    assert 'embers_requests_total{endpoint="completions",model="m"} 3' in text
+    assert ('embers_requests_total{endpoint="completions",model="m",'
+            'tenant="anonymous"} 3') in text
     assert "embers_request_latency_seconds_count" in text
 
 

@@ -70,6 +70,8 @@ class PlatformConfig:
     host: str = "0.0.0.0"
     port: int = 8080
     api_keys: list[str] = field(default_factory=list)
+    tenants: dict[str, str] = field(default_factory=dict)   # tenant name -> api key
+    quotas: dict[str, dict] = field(default_factory=dict)   # tenant -> {*_per_min}
     tick_interval: float = 15.0
     # serving units bind 127.0.0.1:serve_port_base+N — keep it HIGH: RunPod and
     # other hosts proxy low localhost ports (8000/8001/8888).
@@ -130,6 +132,7 @@ def load_config(path: str) -> PlatformConfig:
     return PlatformConfig(
         models=models, gpus=gpus, nodes=nodes, host=raw.get("host", "0.0.0.0"),
         port=raw.get("port", 8080), api_keys=raw.get("api_keys", []) or [],
+        tenants=raw.get("tenants", {}) or {}, quotas=raw.get("quotas", {}) or {},
         tick_interval=raw.get("tick_interval", 15.0),
         serve_port_base=raw.get("serve_port_base", 19000),
         state_db=raw.get("state_db"), overcommit=raw.get("overcommit", False),
@@ -279,6 +282,7 @@ class Platform:
 
         self.app = create_gateway_app(
             Router(), api_keys=set(config.api_keys) or None,
+            tenants=config.tenants or None, quotas=config.quotas or None,
             registry=self.registry, autoscaler=self.controlplane,
             snapshot_fn=self.snapshot)
         self._stop = threading.Event()

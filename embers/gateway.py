@@ -14,6 +14,7 @@ the Phase-4 autoscaler grows/shrinks.
 """
 from __future__ import annotations
 
+import threading
 import time
 import uuid
 from collections.abc import Callable
@@ -242,17 +243,68 @@ def _route(router: Router, model: str | None) -> Backend:
         raise HTTPException(503, f"no ready replica for '{model}'")
 
 
+class QuotaLimiter:
+    """Per-tenant fixed-window rate limits (requests and/or tokens per window).
+    Token usage is only known after a response, so it's checked at request start
+    against the window's running total and added after — a tenant can slightly
+    overshoot on the crossing request, then 429s until the window rolls. Clock is
+    injectable for deterministic tests."""
+
+    def __init__(self, quotas: dict[str, dict] | None = None,
+                 clock: Callable[[], float] = time.monotonic,
+                 window: float = 60.0):
+        self._q = quotas or {}
+        self._clock = clock
+        self._window = window
+        self._state: dict[str, dict] = {}      # tenant -> {start, reqs, tokens}
+        self._lock = threading.Lock()
+
+    def _win(self, tenant: str) -> dict:
+        now = self._clock()
+        st = self._state.get(tenant)
+        if st is None or now - st["start"] >= self._window:
+            st = {"start": now, "reqs": 0, "tokens": 0}
+            self._state[tenant] = st
+        return st
+
+    def check(self, tenant: str) -> None:
+        """Raise 429 if the tenant is already over a limit; else count the request."""
+        limits = self._q.get(tenant)
+        if not limits:
+            return
+        with self._lock:
+            st = self._win(tenant)
+            rpm, tpm = limits.get("requests_per_min"), limits.get("tokens_per_min")
+            if rpm is not None and st["reqs"] >= rpm:
+                raise HTTPException(429, f"tenant '{tenant}' over quota: "
+                                    f"{rpm} requests/min")
+            if tpm is not None and st["tokens"] >= tpm:
+                raise HTTPException(429, f"tenant '{tenant}' over quota: "
+                                    f"{tpm} tokens/min")
+            st["reqs"] += 1
+
+    def add_tokens(self, tenant: str, n: int) -> None:
+        if not self._q.get(tenant) or not n:
+            return
+        with self._lock:
+            self._win(tenant)["tokens"] += n
+
+
 def create_gateway_app(router: Router,
                        api_keys: set[str] | None = None,
+                       tenants: dict[str, str] | None = None,
+                       quotas: dict[str, dict] | None = None,
                        registry: Registry | None = None,
                        snapshot_fn: Callable[[], dict] | None = None,
-                       autoscaler: Any | None = None) -> FastAPI:
+                       autoscaler: Any | None = None,
+                       clock: Callable[[], float] = time.monotonic) -> FastAPI:
     """Build the gateway app. api_keys=None disables auth (dev); a non-empty set
-    requires `Authorization: Bearer <key>`. A registry enables `/metrics`
-    (Prometheus); a snapshot_fn enables `/stats` (JSON platform view). An
-    autoscaler makes the gateway the real front door: each request goes through
-    begin_request (cold-start on demand, single-flight) + end_request (in-flight
-    tracking, so the model isn't parked mid-request)."""
+    requires `Authorization: Bearer <key>`. `tenants` maps tenant name -> api key
+    (multi-tenant: requests are attributed + metered per tenant, and each key
+    doubles as a valid api key); `quotas` maps tenant -> {requests_per_min,
+    tokens_per_min} enforced with 429. A registry enables `/metrics` (Prometheus);
+    a snapshot_fn enables `/stats`. An autoscaler makes the gateway the real front
+    door (begin_request/end_request cold-start + in-flight tracking)."""
     app = FastAPI(title="embers gateway")
     reg = registry or Registry()
     reqs = reg.counter("embers_requests_total", "requests routed by the gateway")
@@ -261,12 +313,21 @@ def create_gateway_app(router: Router,
     tokens = reg.counter("embers_tokens_total",
                          "tokens served (prompt+completion) — for metering/billing")
 
+    # tenant resolution: `tenants` (name->key) inverted to key->name; every key
+    # in tenants is also a valid api key. Auth is on if api_keys OR tenants given.
+    key2tenant = {key: name for name, key in (tenants or {}).items()}
+    effective_keys = set(api_keys or set()) | set(key2tenant)
+    auth_on = bool(effective_keys)
+    quota = QuotaLimiter(quotas, clock=clock)
+
     def _record(endpoint: str, model: str, seconds: float,
-                usage: dict | None = None) -> None:
-        reqs.inc(model=model, endpoint=endpoint)
+                usage: dict | None = None, tenant: str = "anonymous") -> None:
+        reqs.inc(model=model, endpoint=endpoint, tenant=tenant)
         latency.observe(seconds, model=model, endpoint=endpoint)
         if usage:
-            tokens.inc(usage.get("total_tokens", 0), model=model, endpoint=endpoint)
+            n = usage.get("total_tokens", 0)
+            tokens.inc(n, model=model, endpoint=endpoint, tenant=tenant)
+            quota.add_tokens(tenant, n)
 
     def _acquire(model: str | None):
         """Get a backend to serve `model` + a release callback. Through the
@@ -284,13 +345,17 @@ def create_gateway_app(router: Router,
             raise HTTPException(503, f"no ready replica for '{model}'")
         return backend, (lambda: autoscaler.end_request(model))
 
-    def auth(authorization: str | None = Header(None)) -> None:
-        if api_keys is None:
-            return
+    def auth(authorization: str | None = Header(None)) -> str:
+        """Validate the bearer token and resolve it to a tenant id (used to meter
+        + rate-limit). Returns 'anonymous' when auth is off."""
+        if not auth_on:
+            return "anonymous"
         if not authorization or not authorization.startswith("Bearer "):
             raise HTTPException(401, "missing bearer token")
-        if authorization.split(" ", 1)[1] not in api_keys:
+        key = authorization.split(" ", 1)[1]
+        if key not in effective_keys:
             raise HTTPException(401, "invalid api key")
+        return key2tenant.get(key, "default")
 
     @app.get("/v1/models")
     def models() -> dict[str, Any]:
@@ -302,7 +367,8 @@ def create_gateway_app(router: Router,
         return {"object": "list",
                 "data": [{"id": m, "object": "model"} for m in names]}
 
-    def _streamer(endpoint, model, backend, release, sse_iter, usage=None):
+    def _streamer(endpoint, model, backend, release, sse_iter, usage=None,
+                  tenant="anonymous"):
         """Wrap a backend stream as SSE, releasing the in-flight slot when the
         client finishes reading (the request spans the whole stream). `usage` is
         filled by the time the stream ends, so it's metered then."""
@@ -312,25 +378,27 @@ def create_gateway_app(router: Router,
                 yield from sse_iter
             finally:
                 release()
-                _record(endpoint, model, time.perf_counter() - t0, usage)
+                _record(endpoint, model, time.perf_counter() - t0, usage, tenant)
         return StreamingResponse(gen(), media_type="text/event-stream")
 
     @app.post("/v1/completions")
-    def completions(req: CompletionRequest, _=Depends(auth)):
+    def completions(req: CompletionRequest, tenant: str = Depends(auth)):
+        quota.check(tenant)
         backend, release = _acquire(req.model)
         if req.stream:
             usage: dict = {}
             pieces = backend.stream_complete(req.prompt, req.max_tokens,
                                              req.temperature, req.model, usage)
             return _streamer("completions", req.model, backend, release,
-                             completion_sse(pieces, req.model, usage=usage), usage)
+                             completion_sse(pieces, req.model, usage=usage), usage,
+                             tenant)
         t0 = time.perf_counter()
         try:
             text, usage = _complete_call(backend, req.prompt, req.max_tokens,
                                          req.temperature, req.model)
         finally:
             release()
-        _record("completions", req.model, time.perf_counter() - t0, usage)
+        _record("completions", req.model, time.perf_counter() - t0, usage, tenant)
         return {
             "id": f"cmpl-{uuid.uuid4().hex[:24]}",
             "object": "text_completion", "model": req.model,
@@ -339,7 +407,8 @@ def create_gateway_app(router: Router,
         }
 
     @app.post("/v1/chat/completions")
-    def chat(req: ChatRequest, _=Depends(auth)):
+    def chat(req: ChatRequest, tenant: str = Depends(auth)):
+        quota.check(tenant)
         backend, release = _acquire(req.model)
         msgs = [m.model_dump() for m in req.messages]
         if req.stream:
@@ -347,14 +416,14 @@ def create_gateway_app(router: Router,
             pieces = backend.stream_chat(msgs, req.max_tokens, req.temperature,
                                          req.model, usage)
             return _streamer("chat", req.model, backend, release,
-                             chat_sse(pieces, req.model, usage=usage), usage)
+                             chat_sse(pieces, req.model, usage=usage), usage, tenant)
         t0 = time.perf_counter()
         try:
             text, usage = _chat_call(backend, msgs, req.max_tokens,
                                      req.temperature, req.model)
         finally:
             release()
-        _record("chat", req.model, time.perf_counter() - t0, usage)
+        _record("chat", req.model, time.perf_counter() - t0, usage, tenant)
         return {
             "id": f"chatcmpl-{uuid.uuid4().hex[:24]}",
             "object": "chat.completion", "model": req.model,

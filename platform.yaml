@@ -4,6 +4,14 @@ port: 8080
 api_keys: []            # bearer tokens; empty = open (dev only)
 tick_interval: 15       # control-loop period (seconds)
 
+# Multi-tenant (optional): name each tenant's key to meter + rate-limit per tenant.
+# Each key here is also a valid api key. Usage shows up per-tenant in /metrics.
+# tenants:
+#   acme: sk-acme-123
+#   beta: sk-beta-456
+# quotas:                 # per-tenant limits (fixed 60s window) → 429 when exceeded
+#   acme: {requests_per_min: 600, tokens_per_min: 200000}
+
 gpus: auto              # or a list: [{id: gpu0, vram_mb: 24000}]
 
 models:
